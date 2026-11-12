@@ -4,6 +4,39 @@ const { generateToken } = require('../middleware/auth');
 const { resolveCityInput } = require('../utils/location');
 const { publishRealtimeEvent } = require('../utils/realtime');
 
+// Public 1-click demo profiles shown on the login screen. If a production database
+// was never seeded (or a demo row was removed) these accounts are recreated on
+// demand at login time. This is non-destructive: it only ever creates the accounts
+// below and never overwrites an existing user document.
+const DEMO_PASSWORD = 'password123';
+const DEMO_ACCOUNTS = {
+  'elena@example.com': { name: 'Elena Vance', city: 'Bengaluru', role: 'user' },
+  'marcus@example.com': { name: 'Marcus Chen', city: 'Mumbai', role: 'user' },
+  'maya@example.com': { name: 'Maya Patel', city: 'Hyderabad', role: 'user' },
+  'leo@example.com': { name: 'Leo Rossi', city: 'Delhi', role: 'user' },
+  'admin@fashionexchange.com': { name: 'Admin Supervisor', city: 'Mumbai', role: 'admin' },
+};
+
+const ensureDemoAccount = async (email) => {
+  const demo = DEMO_ACCOUNTS[email];
+  if (!demo) return null;
+
+  const existing = await User.findOne({ email }).select('+password');
+  if (existing) return existing;
+
+  try {
+    // Password is hashed by the User schema's pre-save hook.
+    const created = await User.create({ ...demo, email, password: DEMO_PASSWORD });
+    return User.findById(created._id).select('+password');
+  } catch (error) {
+    // Lost a race with a concurrent request that created the same account.
+    if (error.code === 11000) {
+      return User.findOne({ email }).select('+password');
+    }
+    throw error;
+  }
+};
+
 // @desc    Register a new user
 // @route   POST /api/auth/register
 // @access  Public
@@ -66,7 +99,15 @@ const login = async (req, res, next) => {
       return res.status(400).json({ message: 'Please provide both email and password' });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password');
+    const normalizedEmail = email.toLowerCase().trim();
+    let user = await User.findOne({ email: normalizedEmail }).select('+password');
+
+    // Self-heal the public demo accounts so the 1-click demo logins keep working
+    // even when the production database was never seeded.
+    if (!user) {
+      user = await ensureDemoAccount(normalizedEmail);
+    }
+
     if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
