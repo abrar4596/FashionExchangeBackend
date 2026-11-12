@@ -108,7 +108,29 @@ const login = async (req, res, next) => {
       user = await ensureDemoAccount(normalizedEmail);
     }
 
-    if (!user || !(await user.matchPassword(password))) {
+    if (!user) {
+      // Telemetry: distinguishes "database returned no user" from "db not connected".
+      console.warn(JSON.stringify({
+        level: 'warn',
+        timestamp: new Date().toISOString(),
+        scope: 'auth.login',
+        reason: 'user_not_found',
+        email: normalizedEmail,
+      }));
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const passwordMatches = await user.matchPassword(password);
+    if (!passwordMatches) {
+      // Telemetry: the user exists but bcrypt.compare() rejected the password.
+      console.warn(JSON.stringify({
+        level: 'warn',
+        timestamp: new Date().toISOString(),
+        scope: 'auth.login',
+        reason: 'bcrypt_compare_failed',
+        userId: String(user._id),
+        email: normalizedEmail,
+      }));
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
@@ -139,6 +161,16 @@ const login = async (req, res, next) => {
       },
     });
   } catch (error) {
+    // Telemetry: surfaces database/connection failures that would otherwise be a generic 500.
+    console.error(JSON.stringify({
+      level: 'error',
+      timestamp: new Date().toISOString(),
+      scope: 'auth.login',
+      reason: 'unhandled_exception',
+      message: error.message,
+      apiCode: error.apiCode,
+      statusCode: error.statusCode,
+    }));
     return next(error);
   }
 };

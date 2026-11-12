@@ -32,6 +32,10 @@ const connectDB = () => {
   cache.promise = mongoose.connect(uri, {
     serverSelectionTimeoutMS: Number(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS) || 8000,
     maxPoolSize: 10,
+    // Never buffer queries on an uninitialized/dropped connection: fail fast with a
+    // clear error instead of hanging until the serverless function times out.
+    // The /api guard always awaits connectDB() first, so queries never race the connect.
+    bufferCommands: false,
   })
     .then((connection) => {
       console.info(`MongoDB connected: ${connection.connection.host}`);

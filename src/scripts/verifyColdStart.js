@@ -60,7 +60,8 @@ const run = async () => {
 
   const checks = [
     { path: '/api/health', expect: [200] },
-    { path: '/api/v1/locations/cities?q=mum', expect: live ? [200] : [503] },
+    // Locations is pure in-memory JSON, mounted before the DB guard -> never needs a DB connection.
+    { path: '/api/v1/locations/cities?q=mum', expect: [200] },
     { path: '/api/listings', expect: live ? [200] : [503] },
   ];
 
