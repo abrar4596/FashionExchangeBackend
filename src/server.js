@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const dotenv = require('dotenv');
@@ -88,6 +88,10 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// City/location search is pure in-memory JSON -- no database needed.
+// Mount it BEFORE the DB guard so it never blocks on a cold-start connection.
+app.use('/api/v1/locations', require('./routes/locationRoutes'));
+
 app.use('/api', asyncHandler(async (req, res, next) => {
   validateRuntimeEnvironment();
   await connectDB();
@@ -100,7 +104,6 @@ app.use('/api/listings', require('./routes/listingRoutes'));
 app.use('/api/swaps', require('./routes/swapRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
-app.use('/api/v1/locations', require('./routes/locationRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 
 // 404 Handler
