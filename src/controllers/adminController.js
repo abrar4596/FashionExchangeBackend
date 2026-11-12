@@ -2,8 +2,9 @@ const User = require('../models/User');
 const Listing = require('../models/Listing');
 const SwapRequest = require('../models/SwapRequest');
 const { publishRealtimeEvent } = require('../utils/realtime');
+const asyncHandler = require('../utils/asyncHandler');
 
-const getDashboard = async (req, res) => {
+const getDashboard = async (req, res, next) => {
   try {
     const [
       totalUsers,
@@ -140,15 +141,14 @@ const getDashboard = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Admin dashboard error:', error);
-    return res.status(500).json({ message: error.message || 'Server error loading dashboard' });
+    return next(error);
   }
 };
 
 // @desc    Get administrative analytics & success metrics (PRD Section 5)
 // @route   GET /api/admin/metrics
 // @access  Admin only
-const getMetrics = async (req, res) => {
+const getMetrics = async (req, res, next) => {
   try {
     const totalUsers = await User.countDocuments();
     const activeListings = await Listing.countDocuments({ status: 'available' });
@@ -205,15 +205,14 @@ const getMetrics = async (req, res) => {
       categoryBreakdown,
     });
   } catch (error) {
-    console.error('Admin metrics error:', error);
-    return res.status(500).json({ message: error.message || 'Server error generating metrics' });
+    return next(error);
   }
 };
 
 // @desc    List all platform users with management controls
 // @route   GET /api/admin/users
 // @access  Admin only
-const getUsers = async (req, res) => {
+const getUsers = async (req, res, next) => {
   try {
     const users = await User.find()
       .select('-password')
@@ -221,15 +220,14 @@ const getUsers = async (req, res) => {
 
     return res.json(users);
   } catch (error) {
-    console.error('Admin get users error:', error);
-    return res.status(500).json({ message: error.message || 'Server error fetching users' });
+    return next(error);
   }
 };
 
 // @desc    Update user status (suspend, activate) or toggle role
 // @route   PATCH /api/admin/users/:id
 // @access  Admin only
-const updateUserStatus = async (req, res) => {
+const updateUserStatus = async (req, res, next) => {
   try {
     const { status, role } = req.body;
     if (status !== undefined && !['active', 'suspended'].includes(status)) {
@@ -269,15 +267,14 @@ const updateUserStatus = async (req, res) => {
     }
     return res.json(result);
   } catch (error) {
-    console.error('Admin update user error:', error);
-    return res.status(500).json({ message: error.message || 'Server error updating user status' });
+    return next(error);
   }
 };
 
 // @desc    Moderate/Remove inappropriate clothing listing
 // @route   DELETE /api/admin/listings/:id
 // @access  Admin only
-const deleteListingAdmin = async (req, res) => {
+const deleteListingAdmin = async (req, res, next) => {
   try {
     const listing = await Listing.findById(req.params.id);
     if (!listing) {
@@ -333,15 +330,14 @@ const deleteListingAdmin = async (req, res) => {
     });
     return res.json({ message: 'Listing successfully moderated and deleted by administrator' });
   } catch (error) {
-    console.error('Admin delete listing error:', error);
-    return res.status(500).json({ message: error.message || 'Server error deleting listing' });
+    return next(error);
   }
 };
 
 // @desc    Get all swap requests across the platform for dispute oversight
 // @route   GET /api/admin/swaps
 // @access  Admin only
-const getAllSwapsAdmin = async (req, res) => {
+const getAllSwapsAdmin = async (req, res, next) => {
   try {
     const swaps = await SwapRequest.find()
       .populate('requester', 'name email city')
@@ -352,16 +348,15 @@ const getAllSwapsAdmin = async (req, res) => {
 
     return res.json(swaps);
   } catch (error) {
-    console.error('Admin get swaps error:', error);
-    return res.status(500).json({ message: error.message || 'Server error fetching swaps' });
+    return next(error);
   }
 };
 
 module.exports = {
-  getDashboard,
-  getMetrics,
-  getUsers,
-  updateUserStatus,
-  deleteListingAdmin,
-  getAllSwapsAdmin,
+  getDashboard: asyncHandler(getDashboard),
+  getMetrics: asyncHandler(getMetrics),
+  getUsers: asyncHandler(getUsers),
+  updateUserStatus: asyncHandler(updateUserStatus),
+  deleteListingAdmin: asyncHandler(deleteListingAdmin),
+  getAllSwapsAdmin: asyncHandler(getAllSwapsAdmin),
 };

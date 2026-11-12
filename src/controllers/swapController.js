@@ -3,11 +3,12 @@ const Listing = require('../models/Listing');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const { publishRealtimeEvent } = require('../utils/realtime');
+const asyncHandler = require('../utils/asyncHandler');
 
 // @desc    Initiate a new barter swap request
 // @route   POST /api/swaps
 // @access  Private
-const createSwapRequest = async (req, res) => {
+const createSwapRequest = async (req, res, next) => {
   try {
     const { requestedItemId, offeredItemId, initialMessage } = req.body;
 
@@ -86,15 +87,14 @@ const createSwapRequest = async (req, res) => {
     });
     return res.status(201).json(populated);
   } catch (error) {
-    console.error('Create swap request error:', error);
-    return res.status(500).json({ message: error.message || 'Server error creating swap request' });
+    return next(error);
   }
 };
 
 // @desc    Get all swap requests for current user (incoming & outgoing)
 // @route   GET /api/swaps/my-swaps
 // @access  Private
-const getMySwaps = async (req, res) => {
+const getMySwaps = async (req, res, next) => {
   try {
     const userId = req.user._id;
 
@@ -118,15 +118,14 @@ const getMySwaps = async (req, res) => {
       pendingCount: swaps.filter((s) => s.status === 'pending').length,
     });
   } catch (error) {
-    console.error('Get my swaps error:', error);
-    return res.status(500).json({ message: error.message || 'Server error fetching swaps' });
+    return next(error);
   }
 };
 
 // @desc    Update swap request status (accept, reject, cancel, complete)
 // @route   PATCH /api/swaps/:id/status
 // @access  Private
-const updateSwapStatus = async (req, res) => {
+const updateSwapStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
     const swap = await SwapRequest.findById(req.params.id)
@@ -272,13 +271,12 @@ const updateSwapStatus = async (req, res) => {
     });
     return res.json(populated);
   } catch (error) {
-    console.error('Update swap status error:', error);
-    return res.status(500).json({ message: error.message || 'Server error updating swap status' });
+    return next(error);
   }
 };
 
 module.exports = {
-  createSwapRequest,
-  getMySwaps,
-  updateSwapStatus,
+  createSwapRequest: asyncHandler(createSwapRequest),
+  getMySwaps: asyncHandler(getMySwaps),
+  updateSwapStatus: asyncHandler(updateSwapStatus),
 };

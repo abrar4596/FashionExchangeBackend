@@ -7,7 +7,7 @@ const { publishRealtimeEvent } = require('../utils/realtime');
 // @desc    Register a new user
 // @route   POST /api/auth/register
 // @access  Public
-const register = async (req, res) => {
+const register = async (req, res, next) => {
   try {
     const { name, email, password, city, cityId, bio } = req.body;
     const location = resolveCityInput(city, cityId);
@@ -51,15 +51,14 @@ const register = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Registration error:', error);
-    return res.status(error.statusCode || 500).json({ message: error.message || 'Server error during registration' });
+    return next(error);
   }
 };
 
 // @desc    Authenticate user & get token
 // @route   POST /api/auth/login
 // @access  Public
-const login = async (req, res) => {
+const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -99,15 +98,14 @@ const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Login error:', error);
-    return res.status(500).json({ message: error.message || 'Server error during login' });
+    return next(error);
   }
 };
 
 // @desc    Get current user profile
 // @route   GET /api/auth/me
 // @access  Private
-const getMe = async (req, res) => {
+const getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user) {
@@ -132,15 +130,14 @@ const getMe = async (req, res) => {
       createdAt: user.createdAt,
     });
   } catch (error) {
-    console.error('Get profile error:', error);
-    return res.status(500).json({ message: error.message || 'Server error fetching profile' });
+    return next(error);
   }
 };
 
 // @desc    Update user profile
 // @route   PUT /api/auth/profile
 // @access  Private
-const updateProfile = async (req, res) => {
+const updateProfile = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user) {
@@ -175,14 +172,15 @@ const updateProfile = async (req, res) => {
       activeListingsCount: updatedUser.activeListingsCount,
     });
   } catch (error) {
-    console.error('Update profile error:', error);
-    return res.status(error.statusCode || 500).json({ message: error.message || 'Server error updating profile' });
+    return next(error);
   }
 };
 
+const asyncHandler = require('../utils/asyncHandler');
+
 module.exports = {
-  register,
-  login,
-  getMe,
-  updateProfile,
+  register: asyncHandler(register),
+  login: asyncHandler(login),
+  getMe: asyncHandler(getMe),
+  updateProfile: asyncHandler(updateProfile),
 };

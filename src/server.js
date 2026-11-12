@@ -3,19 +3,15 @@ const cors = require('cors');
 const path = require('path');
 const dotenv = require('dotenv');
 const http = require('http');
-const connectDB = require('./config/db');
-const attachSocketServer = require('./socket');
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
-dotenv.config();
+const connectDB = require('./config/db');
+const { validateRuntimeEnvironment } = require('./config/env');
+const asyncHandler = require('./utils/asyncHandler');
+const attachSocketServer = require('./socket');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const httpServer = http.createServer(app);
-const io = attachSocketServer(httpServer);
-app.set('io', io);
-
-// Connect to MongoDB
-connectDB();
 
 // Middleware
 app.use(cors());
@@ -35,6 +31,12 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.use('/api', asyncHandler(async (req, res, next) => {
+  validateRuntimeEnvironment();
+  await connectDB();
+  return next();
+}));
+
 // Mount Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/listings', require('./routes/listingRoutes'));
@@ -51,14 +53,60 @@ app.use((req, res, next) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-  console.error('Unhandled Application Error:', err);
-  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-  res.status(statusCode).json({
-    message: err.message || 'Internal Server Error',
-    stack: process.env.NODE_ENV === 'production' ? null : err.stack,
+  if (res.headersSent) return next(err);
+
+  const timestamp = new Date().toISOString();
+  const statusCode = Number.isInteger(err.statusCode) && err.statusCode >= 400 && err.statusCode < 600
+    ? err.statusCode
+    : 500;
+  console.error(JSON.stringify({
+    level: 'error',
+    timestamp,
+    method: req.method,
+    path: req.originalUrl,
+    message: err.message,
+    stack: err.stack,
+    cause: err.cause && {
+      message: err.cause.message,
+      stack: err.cause.stack,
+    },
+  }));
+
+  return res.status(statusCode).json({
+    message: statusCode >= 500
+      ? statusCode === 503 ? 'Service temporarily unavailable' : 'Internal server error'
+      : err.message || 'Request failed',
+    code: err.apiCode || (statusCode === 503 ? 'SERVICE_UNAVAILABLE' : 'INTERNAL_SERVER_ERROR'),
+    timestamp,
   });
 });
 
-httpServer.listen(PORT, () => {
+const startServer = async () => {
+  validateRuntimeEnvironment();
+  await connectDB();
+
+  const httpServer = http.createServer(app);
+  const io = attachSocketServer(httpServer);
+  app.set('io', io);
+
+  await new Promise((resolve, reject) => {
+    httpServer.once('error', reject);
+    httpServer.listen(PORT, resolve);
+  });
   console.log(`FashionExchange Server listening on http://localhost:${PORT}`);
-});
+};
+
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error(JSON.stringify({
+      level: 'error',
+      timestamp: new Date().toISOString(),
+      message: 'Backend startup failed',
+      error: error.message,
+      stack: error.stack,
+    }));
+    process.exitCode = 1;
+  });
+}
+
+module.exports = app;

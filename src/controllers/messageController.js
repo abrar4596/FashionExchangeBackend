@@ -1,10 +1,11 @@
 const Message = require('../models/Message');
 const SwapRequest = require('../models/SwapRequest');
+const asyncHandler = require('../utils/asyncHandler');
 
 // @desc    Get all messages for a specific swap request thread
 // @route   GET /api/messages/:swapId
 // @access  Private
-const getMessages = async (req, res) => {
+const getMessages = async (req, res, next) => {
   try {
     const swap = await SwapRequest.findById(req.params.swapId);
     if (!swap) {
@@ -27,15 +28,14 @@ const getMessages = async (req, res) => {
 
     return res.json(messages);
   } catch (error) {
-    console.error('Get messages error:', error);
-    return res.status(500).json({ message: error.message || 'Server error fetching messages' });
+    return next(error);
   }
 };
 
 // @desc    Send a message in a swap request thread
 // @route   POST /api/messages/:swapId
 // @access  Private
-const sendMessage = async (req, res) => {
+const sendMessage = async (req, res, next) => {
   try {
     const { text } = req.body;
     if (!text || !text.trim()) {
@@ -71,12 +71,11 @@ const sendMessage = async (req, res) => {
 
     return res.status(201).json(populated);
   } catch (error) {
-    console.error('Send message error:', error);
-    return res.status(500).json({ message: error.message || 'Server error sending message' });
+    return next(error);
   }
 };
 
 module.exports = {
-  getMessages,
-  sendMessage,
+  getMessages: asyncHandler(getMessages),
+  sendMessage: asyncHandler(sendMessage),
 };

@@ -6,13 +6,14 @@ const {
   resolveCityInput,
 } = require('../utils/location');
 const { publishRealtimeEvent } = require('../utils/realtime');
+const asyncHandler = require('../utils/asyncHandler');
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // @desc    Get all available listings with multi-dimensional filtering
 // @route   GET /api/listings
 // @access  Public
-const getListings = async (req, res) => {
+const getListings = async (req, res, next) => {
   try {
     const {
       search,
@@ -117,15 +118,14 @@ const getListings = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Get listings error:', error);
-    return res.status(error.statusCode || 500).json({ message: error.message || 'Server error fetching listings' });
+    return next(error);
   }
 };
 
 // @desc    Get single listing by ID
 // @route   GET /api/listings/:id
 // @access  Public
-const getListingById = async (req, res) => {
+const getListingById = async (req, res, next) => {
   try {
     const listing = await Listing.findById(req.params.id).populate(
       'owner',
@@ -138,15 +138,14 @@ const getListingById = async (req, res) => {
 
     return res.json(listing);
   } catch (error) {
-    console.error('Get listing by ID error:', error);
-    return res.status(500).json({ message: error.message || 'Server error fetching listing' });
+    return next(error);
   }
 };
 
 // @desc    Create a new clothing listing
 // @route   POST /api/listings
 // @access  Private
-const createListing = async (req, res) => {
+const createListing = async (req, res, next) => {
   try {
     const { title, description, category, brand, size, condition, estimatedValue, city, cityId } = req.body;
 
@@ -193,15 +192,14 @@ const createListing = async (req, res) => {
     });
     return res.status(201).json(populated);
   } catch (error) {
-    console.error('Create listing error:', error);
-    return res.status(error.statusCode || 500).json({ message: error.message || 'Server error creating listing' });
+    return next(error);
   }
 };
 
 // @desc    Update a clothing listing
 // @route   PUT /api/listings/:id
 // @access  Private
-const updateListing = async (req, res) => {
+const updateListing = async (req, res, next) => {
   try {
     const listing = await Listing.findById(req.params.id);
     if (!listing) {
@@ -240,15 +238,14 @@ const updateListing = async (req, res) => {
     });
     return res.json(updated);
   } catch (error) {
-    console.error('Update listing error:', error);
-    return res.status(error.statusCode || 500).json({ message: error.message || 'Server error updating listing' });
+    return next(error);
   }
 };
 
 // @desc    Delete a clothing listing
 // @route   DELETE /api/listings/:id
 // @access  Private
-const deleteListing = async (req, res) => {
+const deleteListing = async (req, res, next) => {
   try {
     const listing = await Listing.findById(req.params.id);
     if (!listing) {
@@ -302,15 +299,14 @@ const deleteListing = async (req, res) => {
     }
     return res.json({ message: 'Listing removed successfully', id: req.params.id });
   } catch (error) {
-    console.error('Delete listing error:', error);
-    return res.status(500).json({ message: error.message || 'Server error deleting listing' });
+    return next(error);
   }
 };
 
 // @desc    Get user's personal closet items
 // @route   GET /api/listings/user/closet
 // @access  Private
-const getUserCloset = async (req, res) => {
+const getUserCloset = async (req, res, next) => {
   try {
     const userId = req.user._id;
     const [listings, completedSwaps, pendingSwapRequests] = await Promise.all([
@@ -369,16 +365,15 @@ const getUserCloset = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Get user closet error:', error);
-    return res.status(500).json({ message: error.message || 'Server error fetching user closet' });
+    return next(error);
   }
 };
 
 module.exports = {
-  getListings,
-  getListingById,
-  createListing,
-  updateListing,
-  deleteListing,
-  getUserCloset,
+  getListings: asyncHandler(getListings),
+  getListingById: asyncHandler(getListingById),
+  createListing: asyncHandler(createListing),
+  updateListing: asyncHandler(updateListing),
+  deleteListing: asyncHandler(deleteListing),
+  getUserCloset: asyncHandler(getUserCloset),
 };

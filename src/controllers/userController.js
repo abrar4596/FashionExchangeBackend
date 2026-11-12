@@ -1,7 +1,8 @@
 const User = require('../models/User');
 const { publishRealtimeEvent } = require('../utils/realtime');
+const asyncHandler = require('../utils/asyncHandler');
 
-const updateMyBio = async (req, res) => {
+const updateMyBio = async (req, res, next) => {
   try {
     const bio = req.body.bio;
     if (typeof bio !== 'string') {
@@ -25,9 +26,8 @@ const updateMyBio = async (req, res) => {
     });
     return res.json(user);
   } catch (error) {
-    console.error('Update bio error:', error);
-    return res.status(500).json({ message: error.message || 'Server error updating bio' });
+    return next(error);
   }
 };
 
-module.exports = { updateMyBio };
+module.exports = { updateMyBio: asyncHandler(updateMyBio) };
