@@ -7,8 +7,33 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const connectDB = require('./config/db');
 const { validateRuntimeEnvironment } = require('./config/env');
+const { uploadDir, isServerless } = require('./config/uploads');
 const asyncHandler = require('./utils/asyncHandler');
 const attachSocketServer = require('./socket');
+
+const logFatal = (scope, error) => {
+  console.error(JSON.stringify({
+    level: 'fatal',
+    timestamp: new Date().toISOString(),
+    scope,
+    name: error && error.name,
+    message: error && error.message,
+    stack: error && error.stack,
+  }));
+};
+
+const processGuardKey = Symbol.for('fashion-exchange.process-guards');
+if (!globalThis[processGuardKey]) {
+  process.on('unhandledRejection', (reason) => {
+    logFatal('unhandledRejection', reason instanceof Error ? reason : new Error(String(reason)));
+  });
+  process.on('uncaughtException', (error) => {
+    logFatal('uncaughtException', error);
+    // A long-running server must restart from a clean state; serverless instances are recycled by the platform.
+    if (!isServerless) process.exit(1);
+  });
+  globalThis[processGuardKey] = true;
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -19,7 +44,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static image uploads
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/uploads', express.static(uploadDir));
 
 // Health Check
 app.get('/api/health', (req, res) => {

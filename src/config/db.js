@@ -27,7 +27,12 @@ const connectDB = () => {
     return Promise.reject(error);
   }
 
-  cache.promise = mongoose.connect(uri)
+  // Fail fast (well inside the serverless function timeout) so an unreachable cluster returns 503
+  // instead of hanging until the platform kills the invocation.
+  cache.promise = mongoose.connect(uri, {
+    serverSelectionTimeoutMS: Number(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS) || 8000,
+    maxPoolSize: 10,
+  })
     .then((connection) => {
       console.info(`MongoDB connected: ${connection.connection.host}`);
       return connection;

@@ -7,7 +7,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "seed": "node src/scripts/seed.js",
-    "migrate:city-ids": "node src/scripts/migrateCityIds.js"
+    "migrate:city-ids": "node src/scripts/migrateCityIds.js",
+    "verify:cold-start": "node src/scripts/verifyColdStart.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

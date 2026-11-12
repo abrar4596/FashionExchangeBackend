@@ -1,15 +1,17 @@
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
+const { uploadDir, ensureUploadDir } = require('../config/uploads');
 
-const uploadDir = path.join(__dirname, '../../uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
+// Never touch the filesystem at import time: a throw here kills the serverless cold start.
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDir);
+    if (!ensureUploadDir()) {
+      const error = new Error('Image storage is temporarily unavailable');
+      error.statusCode = 503;
+      error.apiCode = 'STORAGE_UNAVAILABLE';
+      return cb(error);
+    }
+    return cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
