@@ -3,7 +3,9 @@ const cors = require('cors');
 const path = require('path');
 const dotenv = require('dotenv');
 const http = require('http');
-dotenv.config({ path: path.join(__dirname, '../.env') });
+// override:false means platform-injected env vars (e.g. Vercel dashboard) always win over the local .env file.
+// This prevents a committed .env from silently overriding production secrets.
+dotenv.config({ path: path.join(__dirname, '../.env'), override: false });
 
 const connectDB = require('./config/db');
 const { validateRuntimeEnvironment } = require('./config/env');
