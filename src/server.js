@@ -46,6 +46,16 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static image uploads
 app.use('/uploads', express.static(uploadDir));
 
+// Root Health Check (exact match only; does not touch /api or /uploads)
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Clothing Exchange & Swap Marketplace API is running',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Health Check
 app.get('/api/health', (req, res) => {
   res.json({
