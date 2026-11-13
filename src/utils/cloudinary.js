@@ -28,6 +28,36 @@ class ImageUploadError extends Error {
   }
 }
 
+// The SDK wraps HTTP failures in an `UnexpectedResponse` whose message is only
+// "Server returned unexpected status code - <code>" -- the real reason (for example a
+// scoped API key that lacks the `create` upload action) is hidden in the response body.
+// Translate the common statuses into messages an operator can actually act on.
+const toImageUploadError = (error, fallbackMessage = 'Cloudinary upload failed') => {
+  const httpCode = error && error.http_code;
+  if (httpCode === 403) {
+    return new ImageUploadError(
+      'Image storage rejected the upload (403). The Cloudinary API key is missing upload permission.',
+      502,
+      'IMAGE_UPLOAD_FORBIDDEN'
+    );
+  }
+  if (httpCode === 401) {
+    return new ImageUploadError(
+      'Image storage rejected the credentials (401). Please verify the Cloudinary configuration.',
+      502,
+      'IMAGE_UPLOAD_UNAUTHORIZED'
+    );
+  }
+  if (httpCode === 429) {
+    return new ImageUploadError(
+      'Image storage rate limit reached. Please try again shortly.',
+      503,
+      'IMAGE_UPLOAD_RATE_LIMITED'
+    );
+  }
+  return new ImageUploadError((error && error.message) || fallbackMessage);
+};
+
 // Pipes an in-memory Multer buffer straight into Cloudinary. No temp files are touched,
 // which is what keeps this working on Vercel's read-only serverless filesystem.
 const uploadBuffer = (buffer, options = {}) =>
@@ -50,7 +80,7 @@ const uploadBuffer = (buffer, options = {}) =>
       { folder: 'fashion-exchange/listings', resource_type: 'image', ...options },
       (error, result) => {
         if (error) {
-          return reject(new ImageUploadError(error.message || 'Cloudinary upload failed'));
+          return reject(toImageUploadError(error));
         }
         return resolve(result);
       }
@@ -58,7 +88,7 @@ const uploadBuffer = (buffer, options = {}) =>
 
     // Surface stream-level failures (connection reset, bad credentials) as a rejection too.
     uploadStream.on('error', (error) => {
-      reject(new ImageUploadError(error.message || 'Cloudinary stream failed'));
+      reject(toImageUploadError(error, 'Cloudinary stream failed'));
     });
 
     streamifier.createReadStream(buffer).pipe(uploadStream);

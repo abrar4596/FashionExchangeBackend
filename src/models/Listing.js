@@ -45,7 +45,7 @@ const ListingSchema = new mongoose.Schema(
     estimatedValue: {
       type: Number,
       required: [true, 'Please provide an estimated swap value'],
-      min: [1, 'Estimated value must be at least $1'],
+      min: [1, 'Estimated value must be at least ₹1'],
     },
     city: {
       type: String,
