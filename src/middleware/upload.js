@@ -1,29 +1,15 @@
 const multer = require('multer');
 const path = require('path');
-const { uploadDir, ensureUploadDir } = require('../config/uploads');
 
 // Vercel rejects serverless request bodies larger than ~4.5 MB before Express runs,
 // so keep each image comfortably below that ceiling; oversized uploads then fail with
 // a clean JSON error instead of a raw platform 413 / generic 500.
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 
-// Never touch the filesystem at import time: a throw here kills the serverless cold start.
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    if (!ensureUploadDir()) {
-      const error = new Error('Image storage is temporarily unavailable');
-      error.statusCode = 503;
-      error.apiCode = 'STORAGE_UNAVAILABLE';
-      return cb(error);
-    }
-    return cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `clothing-${uniqueSuffix}${ext}`);
-  },
-});
+// Memory storage keeps every upload in a Buffer so the controller can stream it straight
+// to Cloudinary. Nothing is written to disk, which is what makes this safe on Vercel:
+// serverless bundle filesystems (e.g. /var/task) are read-only and their /tmp is ephemeral.
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|webp/;

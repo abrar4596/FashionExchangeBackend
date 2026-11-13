@@ -7,8 +7,47 @@ const {
 } = require('../utils/location');
 const { publishRealtimeEvent } = require('../utils/realtime');
 const asyncHandler = require('../utils/asyncHandler');
+const { uploadBuffer } = require('../utils/cloudinary');
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const MAX_LISTING_IMAGES = 8;
+
+// Streams every in-memory upload to Cloudinary and returns the public HTTPS URLs that are
+// persisted on the listing. Buffers never touch disk, so this is serverless-safe.
+const uploadListingImages = async (files = []) => {
+  const urls = [];
+  for (const file of files) {
+    const result = await uploadBuffer(file.buffer, {
+      folder: 'fashion-exchange/listings',
+    });
+    if (result && result.secure_url) urls.push(result.secure_url);
+  }
+  return urls;
+};
+
+// Merges freshly uploaded Cloudinary URLs with any image URLs posted as plain text fields
+// (the form lets a user paste an external URL instead of choosing a file).
+const collectListingImages = async (req) => {
+  const files = Array.isArray(req.files) ? req.files : [];
+  const bodyImages = req.body.images
+    ? (Array.isArray(req.body.images) ? req.body.images : [req.body.images])
+    : [];
+
+  const uploaded = files.length > 0 ? await uploadListingImages(files) : [];
+
+  return [...uploaded, ...bodyImages]
+    .filter((value) => typeof value === 'string' && value.trim())
+    .map((value) => value.trim())
+    .slice(0, MAX_LISTING_IMAGES);
+};
+
+const respondWithUploadError = (res, uploadError) =>
+  res.status(uploadError.statusCode || 502).json({
+    success: false,
+    message: uploadError.message || 'Image upload failed. Please try again.',
+    code: uploadError.apiCode || 'IMAGE_UPLOAD_FAILED',
+  });
 
 // @desc    Get all available listings with multi-dimensional filtering
 // @route   GET /api/listings
@@ -149,12 +188,20 @@ const createListing = async (req, res, next) => {
   try {
     const { title, description, category, brand, size, condition, estimatedValue, city, cityId } = req.body;
 
-    // Collect image paths from uploaded files or body
+    // Stream any uploaded files to Cloudinary, then merge with pasted image URLs
     let images = [];
-    if (req.files && req.files.length > 0) {
-      images = req.files.map((file) => `/uploads/${file.filename}`);
-    } else if (req.body.images) {
-      images = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+    try {
+      images = await collectListingImages(req);
+    } catch (uploadError) {
+      console.error(JSON.stringify({
+        level: 'error',
+        timestamp: new Date().toISOString(),
+        scope: 'create-listing-upload',
+        userId: req.user && req.user._id,
+        code: uploadError.apiCode,
+        message: uploadError.message,
+      }));
+      return respondWithUploadError(res, uploadError);
     }
 
     if (images.length === 0) {
@@ -255,8 +302,13 @@ const updateListing = async (req, res, next) => {
     if (status) listing.status = status;
 
     if (req.files && req.files.length > 0) {
-      const newImages = req.files.map((file) => `/uploads/${file.filename}`);
-      listing.images = [...listing.images, ...newImages].slice(0, 8);
+      let newImages;
+      try {
+        newImages = await uploadListingImages(req.files);
+      } catch (uploadError) {
+        return respondWithUploadError(res, uploadError);
+      }
+      listing.images = [...listing.images, ...newImages].slice(0, MAX_LISTING_IMAGES);
     }
 
     const updated = await listing.save();

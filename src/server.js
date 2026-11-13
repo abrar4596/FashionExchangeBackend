@@ -9,10 +9,15 @@ dotenv.config({ path: path.join(__dirname, '../.env'), override: false });
 
 const connectDB = require('./config/db');
 const { validateRuntimeEnvironment } = require('./config/env');
-const { uploadDir, isServerless } = require('./config/uploads');
 const { MAX_FILE_BYTES } = require('./middleware/upload');
 const asyncHandler = require('./utils/asyncHandler');
 const attachSocketServer = require('./socket');
+
+// Serverless bundle filesystems (e.g. Vercel's /var/task) are read-only, so listings no
+// longer touch disk -- uploads are streamed to Cloudinary from memory. This flag only
+// controls how the process reacts to a crash: long-running servers restart, serverless
+// instances are recycled by the platform.
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
 const logFatal = (scope, error) => {
   console.error(JSON.stringify({
@@ -80,8 +85,8 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static image uploads
-app.use('/uploads', express.static(uploadDir));
+// Note: listing photos are stored on Cloudinary and served from their secure_url, so
+// there is no local /uploads directory to expose anymore.
 
 // Root Health Check (exact match only; does not touch /api or /uploads)
 app.get('/', (req, res) => {
