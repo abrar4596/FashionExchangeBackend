@@ -120,6 +120,7 @@ app.use('/api/swaps', require('./routes/swapRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
+app.use('/api/v1/wishlist', require('./routes/wishlistRoutes'));
 
 // 404 Handler
 app.use((req, res, next) => {

@@ -63,6 +63,12 @@ const UserSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Saved ("hearted") listings, newest first. Tied to the user document so the
+    // wishlist persists across sessions and devices.
+    wishlist: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Listing' }],
+      default: [],
+    },
   },
   {
     timestamps: true,
