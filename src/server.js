@@ -10,6 +10,7 @@ dotenv.config({ path: path.join(__dirname, '../.env'), override: false });
 const connectDB = require('./config/db');
 const { validateRuntimeEnvironment } = require('./config/env');
 const { uploadDir, isServerless } = require('./config/uploads');
+const { MAX_FILE_BYTES } = require('./middleware/upload');
 const asyncHandler = require('./utils/asyncHandler');
 const attachSocketServer = require('./socket');
 
@@ -130,6 +131,30 @@ app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
 
   const timestamp = new Date().toISOString();
+
+  // Multer failures (oversized photo, too many files, unexpected field) must surface as
+  // descriptive JSON. Without this they fall through as a generic 500 "Internal server error"
+  // and the client can never tell the user what actually went wrong.
+  if (err && err.name === 'MulterError') {
+    const isTooLarge = err.code === 'LIMIT_FILE_SIZE';
+    const statusCode = isTooLarge ? 413 : 400;
+    const limitMb = Math.round(MAX_FILE_BYTES / (1024 * 1024));
+    const message = isTooLarge
+      ? `Image too large. Each photo must be under ${limitMb}MB.`
+      : `Upload rejected: ${err.message}`;
+    console.warn(JSON.stringify({
+      level: 'warn',
+      timestamp,
+      scope: 'upload',
+      method: req.method,
+      path: req.originalUrl,
+      userId: req.user && req.user._id,
+      code: err.code,
+      message: err.message,
+    }));
+    return res.status(statusCode).json({ success: false, message, code: err.code });
+  }
+
   const statusCode = Number.isInteger(err.statusCode) && err.statusCode >= 400 && err.statusCode < 600
     ? err.statusCode
     : 500;

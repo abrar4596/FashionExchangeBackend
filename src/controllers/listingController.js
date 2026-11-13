@@ -192,7 +192,34 @@ const createListing = async (req, res, next) => {
     });
     return res.status(201).json(populated);
   } catch (error) {
-    return next(error);
+    // Surface the exact cause instead of a generic message so the client (and Vercel logs)
+    // can pinpoint whether this was a validation rejection, a write failure, or bad upload input.
+    console.error('Listing creation error details:', {
+      timestamp: new Date().toISOString(),
+      scope: 'create-listing',
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      userId: req.user && req.user._id,
+      fields: Object.keys(req.body || {}),
+      fileCount: Array.isArray(req.files) ? req.files.length : 0,
+    });
+
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: error.message || 'Failed to create listing',
+        details: Object.fromEntries(
+          Object.entries(error.errors || {}).map(([field, detail]) => [field, detail.message])
+        ),
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to create listing',
+      details: error.errors || null,
+    });
   }
 };
 
